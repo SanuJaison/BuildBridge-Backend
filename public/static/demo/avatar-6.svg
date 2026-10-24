@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400" role="img" aria-label="DK avatar">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#22c55e"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </linearGradient>
+    <radialGradient id="r" cx="30%" cy="20%" r="80%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="400" height="400" fill="#052e16"/>
+  <rect width="400" height="400" fill="url(#g)" opacity="0.9"/>
+  <circle cx="95" cy="60" r="190" fill="url(#r)"/>
+  <circle cx="330" cy="330" r="120" fill="#ffffff" opacity="0.08"/>
+  <path d="M0 300 Q120 240 230 310 T400 260 V400 H0Z" fill="#020617" opacity="0.25"/>
+  <text x="200" y="236" font-family="Manrope, Inter, Arial, sans-serif" font-size="132" font-weight="700" fill="#ffffff" text-anchor="middle" letter-spacing="-4">DK</text>
+</svg>

@@ -1,9 +1,15 @@
-const mongoose = require("mongoose")
+const mongoose = require("mongoose");
+const env = require("./env");
 
-const MONGODB_URL = process.env.MONGODB_URL;
+async function connectDB(uri = env.mongoUri) {
+  mongoose.set("strictQuery", true);
+  await mongoose.connect(uri, { serverSelectionTimeoutMS: 15000 });
+  console.log(`MongoDB connected (${mongoose.connection.name})`);
+  return mongoose.connection;
+}
 
-mongoose.connect(MONGODB_URL).then(() => {
-    console.log("MongoDB connected successfully");
-}).catch((error) => {
-    console.log("MongoDB connection failed:", error);
-})
+async function disconnectDB() {
+  await mongoose.disconnect();
+}
+
+module.exports = { connectDB, disconnectDB };

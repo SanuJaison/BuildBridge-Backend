@@ -1,24 +1,50 @@
-require("dotenv").config()
+const http = require("http");
+const { Server } = require("socket.io");
+const env = require("./config/env");
+const { connectDB, disconnectDB } = require("./config/db");
+const { createApp, allowedOrigin } = require("./app");
+const { configureSockets } = require("./socket");
 
-const express = require("express")
+async function start() {
+  await connectDB();
+  const app = createApp();
+  const server = http.createServer(app);
+  const io = new Server(server, {
+    cors: {
+      origin(origin, callback) {
+        if (allowedOrigin(origin)) return callback(null, true);
+        return callback(new Error("Origin not allowed"));
+      },
+      credentials: true,
+    },
+  });
+  app.set("io", io);
+  configureSockets(io);
 
-const cors = require("cors")
+  server.listen(env.port, () => {
+    console.log(`BuildBridge API listening on ${env.publicUrl} (${env.nodeEnv})`);
+  });
 
-require("./config/db")
+  const shutdown = async (signal) => {
+    console.log(`${signal} received. Shutting down gracefully.`);
+    io.close();
+    server.close(async () => {
+      await disconnectDB();
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 10000).unref();
+  };
 
-const buildBridgeServer = express()
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  return { app, server, io };
+}
 
-buildBridgeServer.use(cors())
+if (require.main === module) {
+  start().catch((error) => {
+    console.error("Failed to start BuildBridge API:", error);
+    process.exit(1);
+  });
+}
 
-buildBridgeServer.use(express.json())
-
-buildBridgeServer.get("/", (req, res) => {
-    res.status(200).send("Server started")
-})
-
-const PORT = process.env.PORT
-
-buildBridgeServer.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-
-})
+module.exports = { start };
