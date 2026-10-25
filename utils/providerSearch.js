@@ -1,6 +1,7 @@
 const Category = require("../models/Category");
 const Service = require("../models/Service");
 const PortfolioProject = require("../models/PortfolioProject");
+const { PROVIDER_ROLE_VALUES } = require("../config/providerRoles");
 const { escapeRegex } = require("./helpers");
 
 const PROVIDER_TYPES = ["freelancer", "developer", "company", "agency", "studio"];
@@ -23,6 +24,12 @@ async function buildProviderFilter(query = {}) {
   if (query.remote === "true") and.push({ remote: true });
   if (query.verified === "true") and.push({ verified: true });
 
+  const roles = String(query.role || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => PROVIDER_ROLE_VALUES.includes(item));
+  if (roles.length) and.push({ roles: { $in: roles } });
+
   const q = String(query.q || "").trim();
   if (q) {
     const regex = new RegExp(escapeRegex(q), "i");
@@ -41,6 +48,7 @@ async function buildProviderFilter(query = {}) {
         { bio: regex },
         { skills: regex },
         { technologies: regex },
+        { roles: regex },
         { primaryCategory: { $in: categoryIds } },
         { subcategories: { $in: categoryIds } },
         { _id: { $in: [...serviceProviders, ...projectProviders] } },
@@ -116,6 +124,6 @@ function providerSort(sort) {
 }
 
 const PROVIDER_CARD_FIELDS =
-  "displayName slug type headline avatar coverImage primaryCategory skills ratingAvg ratingCount startingBudget hourlyRate currency location availability verified featured experienceYears completedProjects teamSize organization createdAt";
+  "displayName slug type roles primaryRole headline avatar coverImage primaryCategory skills ratingAvg ratingCount startingBudget hourlyRate currency location availability verified featured experienceYears completedProjects teamSize organization createdAt";
 
 module.exports = { buildProviderFilter, providerSort, PROVIDER_CARD_FIELDS, PROVIDER_TYPES };

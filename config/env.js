@@ -17,6 +17,19 @@ if (!process.env.JWT_SECRET) {
 const nodeEnv = process.env.NODE_ENV || "development";
 const port = toNumber(process.env.PORT, 3000);
 
+const requestedUploadDriver = String(process.env.UPLOAD_DRIVER || "auto").toLowerCase();
+const hasCloudinaryCredentials = Boolean(
+  process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET
+);
+const uploadDriver =
+  requestedUploadDriver === "cloudinary"
+    ? "cloudinary"
+    : requestedUploadDriver === "local"
+      ? "local"
+      : hasCloudinaryCredentials
+        ? "cloudinary"
+        : "local";
+
 module.exports = {
   nodeEnv,
   isProduction: nodeEnv === "production",
@@ -33,4 +46,7 @@ module.exports = {
   uploadDir: path.join(__dirname, "..", "uploads"),
   publicDir: path.join(__dirname, "..", "public", "static"),
   cookieName: "bb_token",
+  uploadDriver,
+  uploadStrict: requestedUploadDriver === "cloudinary",
+  cloudinaryFolder: process.env.CLOUDINARY_FOLDER || "buildbridge",
 };

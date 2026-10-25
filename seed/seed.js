@@ -5,6 +5,13 @@ const { connectDB, disconnectDB } = require("../config/db");
 const { categorySpecs, customers, teamUsers, providers, engagements } = require("./data");
 const { slugify } = require("../utils/helpers");
 const { DEFAULT_BRANDING } = require("../utils/branding");
+const {
+  serviceImages,
+  projectImages,
+  avatarForProvider,
+  avatarForUser,
+  coverForProvider,
+} = require("./demoMedia");
 
 const User = require("../models/User");
 const Category = require("../models/Category");
@@ -37,6 +44,23 @@ const shifted = (date, days) => new Date(date.getTime() + days * DAY);
 const asset = (kind, index) => `/static/demo/${kind}-${index}.svg`;
 const workAsset = (index) => asset("work", ((index - 1) % 12) + 1);
 const avatarAsset = (index) => asset("avatar", index);
+
+const DEMO_ROLES = {
+  aria: ["software-engineer", "web-developer"],
+  marcus: ["app-developer"],
+  priya: ["product-designer"],
+  diego: ["game-developer"],
+  pixelforge: ["game-developer", "motion-designer"],
+  northwind: ["software-engineer", "web-developer"],
+  lumen: ["ai-engineer", "data-scientist"],
+  brightpath: ["digital-marketer", "seo-specialist"],
+  studioember: ["brand-designer", "product-designer"],
+  orbit: ["devops-engineer", "software-engineer"],
+  shieldline: ["cybersecurity-specialist", "technical-consultant"],
+  atlas: ["ecommerce-specialist", "web-developer"],
+  noah: ["motion-designer", "content-creator"],
+  vera: ["ai-engineer", "data-scientist"],
+};
 
 const MODELS = [
   User,
@@ -75,14 +99,14 @@ function passwordFor(role) {
   return role === "admin" ? ADMIN_PASSWORD : DEMO_PASSWORD;
 }
 
-async function createUser(spec, { role = "customer", daysAgo = 180 } = {}) {
+async function createUser(spec, { role = "customer", daysAgo = 180, avatar } = {}) {
   const createdAt = at(daysAgo);
   const doc = await new User({
     name: spec.name,
     email: spec.email,
     password: passwordFor(role),
     role,
-    avatar: avatarAsset(spec.avatar),
+    avatar: avatar || avatarAsset(spec.avatar),
     company: spec.company || "",
     location: spec.location || "",
     bio: spec.bio || "",
@@ -217,15 +241,18 @@ async function seedMarketplace({ categories, userMap, providerMap, orgMap }) {
       orgMap.set(spec.key, organization);
     }
 
+    const roles = DEMO_ROLES[spec.key] || [];
     const profile = await ProviderProfile.create({
       user: owner._id,
       type: spec.type,
+      roles,
+      primaryRole: roles[0] || null,
       displayName: spec.displayName,
       slug: slugify(spec.displayName),
       headline: spec.headline,
       bio: spec.bio,
-      avatar: avatarAsset(spec.avatar),
-      coverImage: workAsset(spec.cover),
+      avatar: avatarForProvider(spec.key),
+      coverImage: coverForProvider(spec.key),
       primaryCategory: primaryCategory._id,
       subcategories: subcategoryDocs.map((item) => item._id),
       skills: spec.skills,
@@ -269,7 +296,7 @@ async function seedMarketplace({ categories, userMap, providerMap, orgMap }) {
         description: serviceSpec.description,
         category: primaryCategory._id,
         subcategory: subcategory._id,
-        images: [workAsset(spec.cover + serviceIndex), workAsset(spec.cover + serviceIndex + 3)],
+        images: serviceImages(spec.key, spec.category, serviceSpec.title),
         startingPrice: serviceSpec.price,
         maxPrice: null,
         currency: "USD",
@@ -301,7 +328,7 @@ async function seedMarketplace({ categories, userMap, providerMap, orgMap }) {
         slug: uniqueInSet(projectSpec.title, usedProjectSlugs),
         summary: projectSpec.summary,
         description: projectSpec.description,
-        images: projectSpec.images.map((image) => workAsset(image)),
+        images: projectImages(spec.key, spec.category, projectSpec.title),
         technologies: projectSpec.technologies,
         skills: projectSpec.technologies,
         category: primaryCategory._id,
@@ -1001,19 +1028,27 @@ async function main() {
       location: "Remote-first",
       bio: "Platform administrator for the BuildBridge demo environment.",
     },
-    { role: "admin", daysAgo: 400 }
+    { role: "admin", daysAgo: 400, avatar: avatarForUser("admin") }
   );
   userMap.set("admin", admin);
 
   for (const [index, spec] of customers.entries()) {
-    const user = await createUser(spec, { role: "customer", daysAgo: 230 - index * 35 });
+    const user = await createUser(spec, {
+      role: "customer",
+      daysAgo: 230 - index * 35,
+      avatar: avatarForUser(spec.key),
+    });
     userMap.set(spec.key, user);
     customerMap.set(spec.key, user);
   }
 
   const teamUserMap = new Map();
   for (const [index, spec] of teamUsers.entries()) {
-    const user = await createUser(spec, { role: "provider", daysAgo: 130 - index * 25 });
+    const user = await createUser(spec, {
+      role: "provider",
+      daysAgo: 130 - index * 25,
+      avatar: avatarForUser(spec.key),
+    });
     userMap.set(spec.key, user);
     teamUserMap.set(spec.key, user);
   }
@@ -1028,7 +1063,11 @@ async function main() {
         location: spec.location,
         bio: spec.headline,
       },
-      { role: "provider", daysAgo: 330 - index * 18 }
+      {
+        role: "provider",
+        daysAgo: 330 - index * 18,
+        avatar: avatarForProvider(spec.key),
+      }
     );
     userMap.set(spec.key, user);
   }

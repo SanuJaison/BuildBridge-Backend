@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const { schemaOptions } = require("./plugins");
+const { PROVIDER_ROLE_VALUES } = require("../config/providerRoles");
 
 const providerProfileSchema = new mongoose.Schema(
   {
@@ -10,6 +11,8 @@ const providerProfileSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    roles: [{ type: String, enum: PROVIDER_ROLE_VALUES }],
+    primaryRole: { type: String, enum: [...PROVIDER_ROLE_VALUES, null], default: null, index: true },
     displayName: { type: String, required: true, trim: true, maxlength: 120 },
     slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
     headline: { type: String, trim: true, maxlength: 160, default: "" },
@@ -57,6 +60,8 @@ const providerProfileSchema = new mongoose.Schema(
 providerProfileSchema.index({ displayName: 1 });
 providerProfileSchema.index({ status: 1, featured: 1, ratingAvg: -1 });
 providerProfileSchema.index({ type: 1, status: 1 });
+providerProfileSchema.index({ primaryRole: 1, status: 1 });
+providerProfileSchema.index({ roles: 1, status: 1 });
 providerProfileSchema.index({ primaryCategory: 1, status: 1 });
 
 module.exports = mongoose.model("ProviderProfile", providerProfileSchema);

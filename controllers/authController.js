@@ -1,6 +1,7 @@
 const { z } = require("zod");
 const User = require("../models/User");
 const ProviderProfile = require("../models/ProviderProfile");
+const { PROVIDER_ROLE_VALUES, primaryRoleFor } = require("../config/providerRoles");
 const Organization = require("../models/Organization");
 const OrganizationMember = require("../models/OrganizationMember");
 const env = require("../config/env");
@@ -19,6 +20,8 @@ const registerSchema = z
     password: z.string().min(8, "Password must be at least 8 characters").max(100),
     role: z.enum(["customer", "provider"]).default("customer"),
     providerType: z.enum(PROVIDER_TYPES).optional(),
+    roles: z.array(z.enum(PROVIDER_ROLE_VALUES)).max(4).optional(),
+    primaryRole: z.enum(PROVIDER_ROLE_VALUES).optional(),
     companyName: z.string().trim().max(140).optional(),
     joinTeam: z.boolean().optional().default(false),
   })
@@ -83,9 +86,12 @@ async function register(req, res, next) {
         });
       }
 
+      const roles = [...new Set(data.roles || [])];
       providerProfile = await ProviderProfile.create({
         user: user._id,
         type: data.providerType,
+        roles,
+        primaryRole: roles.includes(data.primaryRole) ? data.primaryRole : primaryRoleFor(roles),
         displayName,
         slug,
         organization: organization ? organization._id : null,

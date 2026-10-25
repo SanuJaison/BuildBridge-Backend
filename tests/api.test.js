@@ -1,4 +1,5 @@
 process.env.NODE_ENV = "test";
+process.env.UPLOAD_DRIVER = "local";
 
 require("dotenv").config();
 
@@ -331,6 +332,26 @@ describe("BuildBridge API integration", () => {
       .set(as(customerOne.token))
       .send(branding)
       .expect(403);
+  });
+
+  test("only customer accounts can submit project inquiries", async () => {
+    const response = await request(app)
+      .post("/api/inquiries")
+      .set(as(providerOneToken))
+      .send({
+        providerId: String(providerOne._id),
+        category: String(category._id),
+        subcategory: String(subcategory._id),
+        title: "Provider account trying to hire through its seller workspace",
+        description:
+          "A provider workspace has no buying-side inbox, so the API must reject this instead of creating an unreachable inquiry.",
+        budgetMin: 2000,
+        budgetMax: 5000,
+        timeline: "4 weeks",
+        communicationPreference: "in_app",
+      })
+      .expect(403);
+    assert.match(response.body.message, /access/i);
   });
 
   test("runs the inquiry and proposal workflow with ownership checks", async () => {

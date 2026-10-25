@@ -1,4 +1,5 @@
 const ProviderProfile = require("../models/ProviderProfile");
+const Category = require("../models/Category");
 const Service = require("../models/Service");
 const PortfolioProject = require("../models/PortfolioProject");
 const Inquiry = require("../models/Inquiry");
@@ -6,6 +7,8 @@ const Review = require("../models/Review");
 const User = require("../models/User");
 const { buildCategoryPayload } = require("./categoryController");
 const { PROVIDER_CARD_FIELDS } = require("../utils/providerSearch");
+const { PROVIDER_ROLES } = require("../config/providerRoles");
+const { escapeRegex } = require("../utils/helpers");
 const { getBranding } = require("../utils/branding");
 
 async function home(req, res, next) {
@@ -77,4 +80,62 @@ async function home(req, res, next) {
   }
 }
 
-module.exports = { home };
+async function search(req, res, next) {
+  try {
+    const q = String(req.query.q || "").trim().slice(0, 80);
+    if (q.length < 2) {
+      return res.json({ q, providers: [], services: [], projects: [], categories: [], roles: [] });
+    }
+    const regex = new RegExp(escapeRegex(q), "i");
+    const matchedRoles = PROVIDER_ROLES.filter(
+      (role) => regex.test(role.label) || role.keywords.some((keyword) => regex.test(keyword))
+    ).map((role) => role.value);
+
+    const providerOr = [{ displayName: regex }, { headline: regex }, { skills: regex }, { technologies: regex }];
+    if (matchedRoles.length) providerOr.push({ roles: { $in: matchedRoles } });
+
+    const [providers, services, projects, categories] = await Promise.all([
+      ProviderProfile.find({ status: "published", $or: providerOr })
+        .select(PROVIDER_CARD_FIELDS)
+        .populate("primaryCategory", "name slug icon")
+        .sort({ featured: -1, ratingAvg: -1 })
+        .limit(5)
+        .lean(),
+      Service.find({ status: "published", $or: [{ title: regex }, { description: regex }, { tags: regex }] })
+        .select("title slug startingPrice currency pricingType images provider category")
+        .populate("provider", "displayName slug avatar type verified ratingAvg roles primaryRole")
+        .populate("category", "name slug icon")
+        .sort({ views: -1, createdAt: -1 })
+        .limit(5)
+        .lean(),
+      PortfolioProject.find({
+        status: "published",
+        $or: [{ title: regex }, { summary: regex }, { technologies: regex }],
+      })
+        .select("title slug summary images provider category createdAt")
+        .populate("provider", "displayName slug avatar verified")
+        .populate("category", "name slug icon")
+        .sort({ featured: -1, createdAt: -1 })
+        .limit(4)
+        .lean(),
+      Category.find({ isActive: true, $or: [{ name: regex }, { description: regex }, { slug: regex }] })
+        .select("name slug icon parent")
+        .sort({ order: 1 })
+        .limit(6)
+        .lean(),
+    ]);
+
+    res.json({
+      q,
+      providers,
+      services: services.filter((item) => item.provider),
+      projects: projects.filter((item) => item.provider),
+      categories,
+      roles: PROVIDER_ROLES.filter((role) => matchedRoles.includes(role.value)),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { home, search };

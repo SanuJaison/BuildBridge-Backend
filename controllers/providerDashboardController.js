@@ -1,5 +1,6 @@
 const { z } = require("zod");
 const ProviderProfile = require("../models/ProviderProfile");
+const { PROVIDER_ROLE_VALUES, primaryRoleFor } = require("../config/providerRoles");
 const Category = require("../models/Category");
 const Organization = require("../models/Organization");
 const OrganizationMember = require("../models/OrganizationMember");
@@ -20,6 +21,8 @@ const optionalNumber = z.union([z.number().min(0), z.null()]).optional();
 
 const profileSchema = z.object({
   displayName: z.string().trim().min(2).max(120).optional(),
+  roles: z.array(z.enum(PROVIDER_ROLE_VALUES)).max(4).optional(),
+  primaryRole: z.union([z.enum(PROVIDER_ROLE_VALUES), z.literal(""), z.null()]).optional(),
   headline: z.string().trim().max(160).optional(),
   bio: z.string().trim().max(4000).optional(),
   avatar: z.string().trim().max(1000).optional(),
@@ -90,6 +93,22 @@ async function updateMyProfile(req, res, next) {
     }
     const data = { ...req.body };
     if (data.primaryCategory === "") data.primaryCategory = null;
+    if (data.primaryRole === "") data.primaryRole = null;
+
+    if (data.roles !== undefined) {
+      data.roles = [...new Set(data.roles)];
+      if (!data.roles.length) {
+        data.primaryRole = null;
+      } else if (!data.primaryRole) {
+        data.primaryRole = primaryRoleFor(data.roles);
+      }
+    }
+    if (data.primaryRole) {
+      const effectiveRoles = data.roles !== undefined ? data.roles : req.provider.roles || [];
+      if (!effectiveRoles.includes(data.primaryRole)) {
+        throw ApiError.badRequest("Choose a primary role from the roles you selected");
+      }
+    }
 
     if (data.primaryCategory) {
       const category = await Category.findOne({ _id: data.primaryCategory, isActive: true });
@@ -112,6 +131,9 @@ async function updateMyProfile(req, res, next) {
     allowed.forEach((field) => {
       if (data[field] !== undefined) req.provider[field] = data[field];
     });
+    if (req.provider.roles?.length && !req.provider.primaryRole) {
+      req.provider.primaryRole = primaryRoleFor(req.provider.roles);
+    }
     await req.provider.save();
     const provider = await loadProfile(req.provider._id);
     res.json({ provider, message: "Provider profile saved" });
