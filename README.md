@@ -111,6 +111,17 @@ All other seeded accounts use `Demo@12345`. Admin credentials are intentionally 
 this README and are never shown in the public web interface. Public registration can only create
 `customer` or `provider` accounts; the API rejects attempts to self-assign the `admin` role.
 
+The seed also generates **1,150 bulk demo provider accounts** — ten per subcategory across all 115
+subcategories, rotating through freelancer, developer, company, agency, and studio profiles. They
+share one password and follow a numbered email pattern:
+
+- `provider0001@demo.buildbridge.dev` through `provider1150@demo.buildbridge.dev`
+- Password for all: `Demo@12345`
+
+Bulk accounts have zeroed ratings and no fabricated engagements or reviews; their profiles, one
+service each, and one portfolio project each exist purely to exercise marketplace discovery,
+filtering, and pagination at scale.
+
 The seed includes 11 parent categories and 115 subcategories, all database-driven and editable by an
 administrator.
 

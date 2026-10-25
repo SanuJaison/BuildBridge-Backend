@@ -1,8 +1,10 @@
 require("../config/env");
 
 const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 const { connectDB, disconnectDB } = require("../config/db");
 const { categorySpecs, customers, teamUsers, providers, engagements } = require("./data");
+const { buildBulkProviders } = require("./bulk");
 const { slugify } = require("../utils/helpers");
 const { DEFAULT_BRANDING } = require("../utils/branding");
 const {
@@ -41,6 +43,11 @@ const ADMIN_PASSWORD = "Admin@12345";
 
 const at = (daysAgo, extraMs = 0) => new Date(now - daysAgo * DAY + extraMs);
 const shifted = (date, days) => new Date(date.getTime() + days * DAY);
+const hashStringSeed = (value) => {
+  let total = 7;
+  for (const char of String(value)) total = (total * 31 + char.charCodeAt(0)) % 1000003;
+  return total;
+};
 const asset = (kind, index) => `/static/demo/${kind}-${index}.svg`;
 const workAsset = (index) => asset("work", ((index - 1) % 12) + 1);
 const avatarAsset = (index) => asset("avatar", index);
@@ -60,6 +67,20 @@ const DEMO_ROLES = {
   atlas: ["ecommerce-specialist", "web-developer"],
   noah: ["motion-designer", "content-creator"],
   vera: ["ai-engineer", "data-scientist"],
+};
+
+const CATEGORY_DEFAULT_ROLES = {
+  "website-development": ["web-developer"],
+  "web-application-development": ["software-engineer", "web-developer"],
+  "mobile-application-development": ["app-developer"],
+  "game-development": ["game-developer"],
+  "digital-marketing": ["digital-marketer", "seo-specialist"],
+  "ui-ux-product-design": ["product-designer"],
+  "branding-creative-services": ["brand-designer", "content-creator"],
+  "ai-machine-learning-data": ["ai-engineer", "data-scientist"],
+  "cloud-devops-infrastructure": ["devops-engineer", "software-engineer"],
+  "cybersecurity-technical-consulting": ["cybersecurity-specialist", "technical-consultant"],
+  "emerging-specialized-technologies": ["technical-consultant", "software-engineer"],
 };
 
 const MODELS = [
@@ -197,13 +218,13 @@ function findSubcategory(childrenByParent, primarySlug, name) {
   return child;
 }
 
-async function seedMarketplace({ categories, userMap, providerMap, orgMap }) {
+async function seedMarketplace({ categories, userMap, providerMap, orgMap, providerSpecs }) {
   const usedServiceSlugs = new Set();
   const usedProjectSlugs = new Set();
   const serviceMap = new Map();
   const projectMap = new Map();
 
-  for (const [index, spec] of providers.entries()) {
+  for (const [index, spec] of providerSpecs.entries()) {
     const owner = userMap.get(spec.key);
     const primaryCategory = categories.parentBySlug.get(spec.category);
     if (!owner || !primaryCategory) throw new Error(`Missing provider owner/category for ${spec.key}`);
@@ -241,7 +262,7 @@ async function seedMarketplace({ categories, userMap, providerMap, orgMap }) {
       orgMap.set(spec.key, organization);
     }
 
-    const roles = DEMO_ROLES[spec.key] || [];
+    const roles = DEMO_ROLES[spec.key] || CATEGORY_DEFAULT_ROLES[spec.category] || [];
     const profile = await ProviderProfile.create({
       user: owner._id,
       type: spec.type,
@@ -999,6 +1020,10 @@ async function printSummary(summary) {
   console.log(`Customer   maya@buildbridge.dev        / ${DEMO_PASSWORD}`);
   console.log(`Customer   lucas@buildbridge.dev       / ${DEMO_PASSWORD}`);
   console.log("");
+  console.log(`Bulk demo providers  ${summary.bulkProviders} accounts (10 per subcategory), all type/`);
+  console.log(`  organization mixes included. Emails ${summary.bulkEmailFirst} through`);
+  console.log(`  ${summary.bulkEmailLast} / ${DEMO_PASSWORD}`);
+  console.log("");
   console.log("All other seeded accounts use the same demo password.");
   console.log("This data is fictional and must not be presented as real marketplace activity.");
   console.log("────────────────────────────────────────\n");
@@ -1072,20 +1097,43 @@ async function main() {
     userMap.set(spec.key, user);
   }
 
-  console.log(`Seeded ${userMap.size} users.`);
+  const bulkProviders = buildBulkProviders(categorySpecs);
+  const demoHash = await bcrypt.hash(DEMO_PASSWORD, 12);
+  const bulkUserDocs = bulkProviders.map((spec) => ({
+    name: spec.owner.name,
+    email: spec.owner.email,
+    password: demoHash,
+    role: "provider",
+    avatar: avatarForProvider(spec.key),
+    company: spec.organization ? spec.organization.name : "",
+    location: spec.location,
+    bio: spec.headline,
+    status: "active",
+    emailNotifications: true,
+    lastLoginAt: at(2 + (hashStringSeed(spec.key) % 60)),
+    isDemo: true,
+    createdAt: at(spec.createdDaysAgo || 180),
+    updatedAt: at(spec.createdDaysAgo || 180),
+  }));
+  const bulkUsers = await User.insertMany(bulkUserDocs, { timestamps: false });
+  bulkUsers.forEach((user, index) => userMap.set(bulkProviders[index].key, user));
+
+  console.log(`Seeded ${userMap.size} users (${bulkProviders.length} bulk demo providers).`);
 
   const orgMap = new Map();
   const providerMap = new Map();
+  const allProviders = [...providers, ...bulkProviders];
   const { serviceMap } = await seedMarketplace({
     categories,
     userMap,
     providerMap,
     orgMap,
+    providerSpecs: allProviders,
   });
 
   const teamMemberships = await seedTeamMemberships(teamUserMap, orgMap);
   const serviceCount = [...serviceMap.values()].reduce((total, items) => total + items.length, 0);
-  const projectCount = providers.reduce((total, provider) => total + provider.projects.length, 0);
+  const projectCount = allProviders.reduce((total, provider) => total + provider.projects.length, 0);
   console.log(
     `Seeded ${providerMap.size} providers, ${orgMap.size} organizations, ${teamMemberships} extra team memberships, ${serviceCount} services, and ${projectCount} portfolio projects.`
   );
@@ -1116,6 +1164,9 @@ async function main() {
     projects: projectCount,
     engagements: engagementSummary,
     community: communitySummary,
+    bulkProviders: bulkProviders.length,
+    bulkEmailFirst: bulkProviders[0]?.owner.email,
+    bulkEmailLast: bulkProviders[bulkProviders.length - 1]?.owner.email,
   });
 
   await disconnectDB();

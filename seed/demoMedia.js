@@ -151,8 +151,15 @@ function imagesFor(providerKey, categorySlug, seed, count = 2) {
   return imageNames(providerKey, categorySlug, seed, count).map(photo);
 }
 
+const FACE_POOL = Object.values(PROVIDER_AVATARS);
+const COVER_POOL = Object.values(PROVIDER_COVERS);
+
+function pickHashed(pool, key) {
+  return pool[hash(String(key)) % pool.length];
+}
+
 function avatarForProvider(providerKey) {
-  return PROVIDER_AVATARS[providerKey] || photo("face-aria");
+  return PROVIDER_AVATARS[providerKey] || pickHashed(FACE_POOL, `face:${providerKey}`);
 }
 
 function avatarForUser(userKey) {
@@ -160,7 +167,7 @@ function avatarForUser(userKey) {
 }
 
 function coverForProvider(providerKey) {
-  return PROVIDER_COVERS[providerKey] || photo("abstract-3d");
+  return PROVIDER_COVERS[providerKey] || pickHashed(COVER_POOL, `cover:${providerKey}`);
 }
 
 module.exports = {
